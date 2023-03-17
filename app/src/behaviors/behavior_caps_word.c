@@ -7,10 +7,10 @@
 #define DT_DRV_COMPAT zmk_behavior_caps_word
 
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
 #include <zmk/behavior.h>
-
 #include <zmk/endpoints.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
@@ -32,24 +32,58 @@ struct caps_word_continue_item {
 
 struct behavior_caps_word_config {
     zmk_mod_flags_t mods;
+    int idle_timeout_ms;
     size_t continuations_count;
     struct caps_word_continue_item continuations[];
 };
 
 struct behavior_caps_word_data {
+    struct k_timer idle_timer;
     bool active;
 };
+
+static const struct device *devs[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
+static size_t dev_count = 0;
+static int pressed_key_count = 0;
+
+static void restart_caps_word_idle_timer(const struct device *dev) {
+    const struct behavior_caps_word_config *config = dev->config;
+    struct behavior_caps_word_data *data = dev->data;
+
+    if (config->idle_timeout_ms) {
+        k_timer_start(&data->idle_timer, K_MSEC(config->idle_timeout_ms), K_NO_WAIT);
+    }
+}
+
+static void restart_caps_word_idle_timer_all_devs(void) {
+    for (int i = 0; i < dev_count; i++) {
+        if (devs[i]) {
+            restart_caps_word_idle_timer(devs[i]);
+        }
+    }
+}
+
+static void cancel_caps_word_idle_timer(const struct device *dev) {
+    const struct behavior_caps_word_config *config = dev->config;
+    struct behavior_caps_word_data *data = dev->data;
+
+    if (config->idle_timeout_ms) {
+        k_timer_stop(&data->idle_timer);
+    }
+}
 
 static void activate_caps_word(const struct device *dev) {
     struct behavior_caps_word_data *data = dev->data;
 
     data->active = true;
+    restart_caps_word_idle_timer(dev);
 }
 
 static void deactivate_caps_word(const struct device *dev) {
     struct behavior_caps_word_data *data = dev->data;
 
     data->active = false;
+    cancel_caps_word_idle_timer(dev);
 }
 
 static int on_caps_word_binding_pressed(struct zmk_behavior_binding *binding,
@@ -80,9 +114,6 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh);
 
 ZMK_LISTENER(behavior_caps_word, caps_word_keycode_state_changed_listener);
 ZMK_SUBSCRIPTION(behavior_caps_word, zmk_keycode_state_changed);
-
-static const struct device *devs[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
-static size_t dev_count = 0;
 
 static bool caps_word_is_caps_includelist(const struct behavior_caps_word_config *config,
                                           uint16_t usage_page, uint8_t usage_id,
@@ -137,9 +168,23 @@ static void caps_word_enhance_usage(const struct behavior_caps_word_config *conf
 
 static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
     struct zmk_keycode_state_changed *ev = as_zmk_keycode_state_changed(eh);
-    if (ev == NULL || !ev->state) {
+    if (ev == NULL) {
         return ZMK_EV_EVENT_BUBBLE;
     }
+
+    if (!ev->state) {
+        // Idle timer should only run when all keys are released.
+        pressed_key_count--;
+        pressed_key_count = MAX(pressed_key_count, 0);
+
+        if (pressed_key_count == 0) {
+            restart_caps_word_idle_timer_all_devs();
+        }
+
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+
+    pressed_key_count++;
 
     for (int i = 0; i < dev_count; i++) {
         const struct device *dev = devs[i];
@@ -151,6 +196,8 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
         if (!data->active) {
             continue;
         }
+
+        cancel_caps_word_idle_timer(dev);
 
         const struct behavior_caps_word_config *config = dev->config;
 
@@ -168,7 +215,22 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
+static void caps_word_timeout_handler(struct k_timer *timer) {
+    struct behavior_caps_word_data *data =
+        CONTAINER_OF(timer, struct behavior_caps_word_data, idle_timer);
+
+    LOG_DBG("Deactivating caps_word for idle timeout");
+    data->active = false;
+}
+
 static int behavior_caps_word_init(const struct device *dev) {
+    const struct behavior_caps_word_config *config = dev->config;
+    struct behavior_caps_word_data *data = dev->data;
+
+    if (config->idle_timeout_ms) {
+        k_timer_init(&data->idle_timer, caps_word_timeout_handler, NULL);
+    }
+
     __ASSERT(dev_count < ARRAY_SIZE(devs), "Too many devices");
 
     devs[dev_count] = dev;
@@ -190,6 +252,7 @@ static int behavior_caps_word_init(const struct device *dev) {
     static struct behavior_caps_word_data behavior_caps_word_data_##n = {.active = false};         \
     static struct behavior_caps_word_config behavior_caps_word_config_##n = {                      \
         .mods = DT_INST_PROP_OR(n, mods, MOD_LSFT),                                                \
+        .idle_timeout_ms = DT_INST_PROP(n, idle_timeout_ms),                                       \
         .continuations = {LISTIFY(DT_INST_PROP_LEN(n, continue_list), CONTINUATION_ITEM, (, ),     \
                                   n)},                                                             \
         .continuations_count = DT_INST_PROP_LEN(n, continue_list),                                 \

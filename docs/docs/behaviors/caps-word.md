@@ -53,6 +53,20 @@ In addition, if you would like _multiple_ modifiers, instead of just `MOD_LSFT`,
 };
 ```
 
+#### Idle Timeout
+
+By default, caps word turns off automatically if no keys are pressed for 5 seconds. This can be changed by setting the `idle-timeout-ms` property in your keymap. This value is in milliseconds.
+
+For example, this would change the timeout to 10 seconds:
+
+```
+&caps_word {
+    idle-timeout-ms = <10000>;
+};
+```
+
+Setting the timeout to 0 configures caps word to never time out. It will remain active until you press a key that turns off caps word.
+
 ### Multiple Caps Breaks
 
 If you want to use multiple caps breaks with different codes to break the caps, you can add additional caps words instances to use in your keymap:
