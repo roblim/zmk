@@ -15,3 +15,9 @@
         };
     };
 };
+
+&caps_word {
+	continue-list = <UNDERSCORE BACKSPACE DELETE>;
+	/delete-property/ shift-list;
+	idle-timeout-ms = <0>;
+};
