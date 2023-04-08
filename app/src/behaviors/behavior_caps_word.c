@@ -24,11 +24,17 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
+struct key_list {
+    const struct zmk_key_decoded *keys;
+    size_t len;
+};
+
 struct behavior_caps_word_config {
-    zmk_mod_flags_t mods;
+    struct key_list continuations;
+    struct key_list shifted;
     int idle_timeout_ms;
-    size_t continuations_count;
-    struct zmk_key_decoded continuations[];
+    zmk_mod_flags_t mods;
+    bool no_default_keys;
 };
 
 struct behavior_caps_word_data {
@@ -109,19 +115,13 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh);
 ZMK_LISTENER(behavior_caps_word, caps_word_keycode_state_changed_listener);
 ZMK_SUBSCRIPTION(behavior_caps_word, zmk_keycode_state_changed);
 
-static bool caps_word_is_caps_includelist(const struct behavior_caps_word_config *config,
-                                          uint16_t usage_page, uint8_t usage_id,
-                                          uint8_t implicit_modifiers) {
-    for (int i = 0; i < config->continuations_count; i++) {
-        const struct zmk_key_decoded *continuation = &config->continuations[i];
-        LOG_DBG("Comparing with 0x%02X - 0x%02X (with implicit mods: 0x%02X)", continuation->page,
-                continuation->id, continuation->modifiers);
+static bool key_list_contains(const struct key_list *list, uint16_t usage_page, zmk_key_t usage_id,
+                              zmk_mod_flags_t modifiers) {
+    for (int i = 0; i < list->len; i++) {
+        const struct zmk_key_decoded *key = &list->keys[i];
 
-        if (continuation->page == usage_page && continuation->id == usage_id &&
-            (continuation->modifiers & (implicit_modifiers | zmk_hid_get_explicit_mods())) ==
-                continuation->modifiers) {
-            LOG_DBG("Continuing capsword, found included usage: 0x%02X - 0x%02X", usage_page,
-                    usage_id);
+        if (key->page == usage_page && key->id == usage_id &&
+            (key->modifiers & modifiers) == key->modifiers) {
             return true;
         }
     }
@@ -129,34 +129,40 @@ static bool caps_word_is_caps_includelist(const struct behavior_caps_word_config
     return false;
 }
 
-static bool caps_word_is_alpha(uint8_t usage_id) {
-    return (usage_id >= HID_USAGE_KEY_KEYBOARD_A && usage_id <= HID_USAGE_KEY_KEYBOARD_Z);
+static bool caps_word_is_alpha(uint16_t usage_page, zmk_key_t usage_id) {
+    return (usage_page == HID_USAGE_KEY && usage_id >= HID_USAGE_KEY_KEYBOARD_A &&
+            usage_id <= HID_USAGE_KEY_KEYBOARD_Z);
 }
 
-static bool caps_word_is_numeric(uint8_t usage_id) {
-    return (usage_id >= HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION &&
+static bool caps_word_is_numeric(uint16_t usage_page, zmk_key_t usage_id) {
+    return (usage_page == HID_USAGE_KEY && usage_id >= HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION &&
             usage_id <= HID_USAGE_KEY_KEYBOARD_0_AND_RIGHT_PARENTHESIS);
 }
 
 static bool caps_word_should_enhance(const struct behavior_caps_word_config *config,
                                      struct zmk_keycode_state_changed *ev) {
-    if (ev->usage_page != HID_USAGE_KEY) {
-        return false;
-    }
-
-    if (caps_word_is_alpha(ev->keycode)) {
+    if (!config->no_default_keys && caps_word_is_alpha(ev->usage_page, ev->keycode)) {
         return true;
     }
 
-    return false;
+    zmk_mod_flags_t modifiers = ev->implicit_modifiers | zmk_hid_get_explicit_mods();
+
+    return key_list_contains(&config->shifted, ev->usage_page, ev->keycode, modifiers);
 }
 
-static void caps_word_enhance_usage(const struct behavior_caps_word_config *config,
-                                    struct zmk_keycode_state_changed *ev) {
-    if (caps_word_should_enhance(config, ev)) {
-        LOG_DBG("Enhancing usage 0x%02X with modifiers: 0x%02X", ev->keycode, config->mods);
-        ev->implicit_modifiers |= config->mods;
+static bool caps_word_is_continuation(const struct behavior_caps_word_config *config,
+                                      const struct zmk_keycode_state_changed *ev) {
+    if (is_mod(ev->usage_page, ev->keycode) || caps_word_should_enhance(config, ev)) {
+        return true;
     }
+
+    if (!config->no_default_keys && caps_word_is_numeric(ev->usage_page, ev->keycode)) {
+        return true;
+    }
+
+    zmk_mod_flags_t modifiers = ev->implicit_modifiers | zmk_hid_get_explicit_mods();
+
+    return key_list_contains(&config->continuations, ev->usage_page, ev->keycode, modifiers);
 }
 
 static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
@@ -194,12 +200,12 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
 
         const struct behavior_caps_word_config *config = dev->config;
 
-        caps_word_enhance_usage(config, ev);
+        if (caps_word_should_enhance(config, ev)) {
+            LOG_DBG("Enhancing usage 0x%02X with modifiers: 0x%02X", ev->keycode, config->mods);
+            ev->implicit_modifiers |= config->mods;
+        }
 
-        if (!caps_word_is_alpha(ev->keycode) && !caps_word_is_numeric(ev->keycode) &&
-            !is_mod(ev->usage_page, ev->keycode) &&
-            !caps_word_is_caps_includelist(config, ev->usage_page, ev->keycode,
-                                           ev->implicit_modifiers)) {
+        if (!caps_word_is_continuation(config, ev)) {
             LOG_DBG("Deactivating caps_word for 0x%02X - 0x%02X", ev->usage_page, ev->keycode);
             deactivate_caps_word(dev);
         }
@@ -231,16 +237,30 @@ static int behavior_caps_word_init(const struct device *dev) {
     return 0;
 }
 
-#define CONTINUATION_ITEM(i, n) ZMK_KEY_DECODE(DT_INST_PROP_BY_IDX(n, continue_list, i))
+#define KEY_ARRAY_ITEM(i, n, prop) ZMK_KEY_DECODE(DT_INST_PROP_BY_IDX(n, prop, i))
+
+#define KEY_LIST_PROP(n, prop)                                                                     \
+    COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(n), prop),                                            \
+                ({LISTIFY(DT_INST_PROP_LEN(n, prop), KEY_ARRAY_ITEM, (, ), n, prop)}), ({}))
+
+#define KEY_LIST(array) ((struct key_list){.keys = array, .len = ARRAY_SIZE(array)})
+
+#define EMPTY_KEY_LIST ((struct key_list){.keys = NULL, .len = 0})
 
 #define KP_INST(n)                                                                                 \
+    static const struct zmk_key_decoded caps_word_continue_list_##n[] =                            \
+        KEY_LIST_PROP(n, continue_list);                                                           \
+                                                                                                   \
+    static const struct zmk_key_decoded caps_word_shift_list_##n[] = KEY_LIST_PROP(n, shift_list); \
+                                                                                                   \
     static struct behavior_caps_word_data behavior_caps_word_data_##n = {.active = false};         \
-    static struct behavior_caps_word_config behavior_caps_word_config_##n = {                      \
+                                                                                                   \
+    static const struct behavior_caps_word_config behavior_caps_word_config_##n = {                \
         .mods = DT_INST_PROP_OR(n, mods, MOD_LSFT),                                                \
         .idle_timeout_ms = DT_INST_PROP(n, idle_timeout_ms),                                       \
-        .continuations = {LISTIFY(DT_INST_PROP_LEN(n, continue_list), CONTINUATION_ITEM, (, ),     \
-                                  n)},                                                             \
-        .continuations_count = DT_INST_PROP_LEN(n, continue_list),                                 \
+        .no_default_keys = DT_INST_PROP(n, no_default_keys),                                       \
+        .continuations = KEY_LIST(caps_word_continue_list_##n),                                    \
+        .shifted = KEY_LIST(caps_word_shift_list_##n),                                             \
     };                                                                                             \
     DEVICE_DT_INST_DEFINE(n, behavior_caps_word_init, NULL, &behavior_caps_word_data_##n,          \
                           &behavior_caps_word_config_##n, APPLICATION,                             \
