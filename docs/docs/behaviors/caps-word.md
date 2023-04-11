@@ -5,9 +5,9 @@ sidebar_label: Caps Word
 
 ## Summary
 
-The caps word behavior behaves similar to a caps lock, but will automatically deactivate when any key not in a continue list is pressed, or if the caps word key is pressed again. For smaller keyboards using [mod-taps](/docs/behaviors/mod-tap), this can help avoid repeated alternating holds when typing words in all caps.
+The caps word behavior behaves similar to a caps lock, but it will automatically deactivate at the end of a word. This is useful for typing single words in all capitals, such as abbreviations or identifiers in code. This is especially useful for smaller keyboards using [mod-taps](/docs/behaviors/mod-tap), where it can help avoid repeated alternating holds when typing words in all caps.
 
-The modifiers are applied only to to the alphabetic (`A` to `Z`) keycodes, to avoid automatically appliying them to numeric values, etc.
+When caps word is active, Shift is added to capitalize letters and change `-` to `_`. Caps word deactivates at the end of a word, that is when any key is pressed other than alphanumeric characters, `MINUS`, `UNDERSCORE`, `BACKSPACE`, or `DELETE`. It also deactivates if the caps word key is pressed again, or when the keyboard is idle for 5 seconds.
 
 ### Behavior Binding
 
@@ -21,13 +21,15 @@ Example:
 
 ### Configuration
 
-#### Continue List
+#### Shift List
 
-By default, the caps word will remain active when any alphanumeric character or underscore (`UNDERSCORE`), backspace (`BACKSPACE`), or delete (`DELETE`) characters are pressed. Any other non-modifier keycode sent will turn off caps word. If you would like to override this, you can set a new array of keys in the `continue-list` property in your keymap:
+By default, caps word will apply the Shift modifier to alpha keys and `MINUS`. If you would like to override this, you can set a new array of keys in the `shift-list` property in your keymap. Any keys added to this list will both continue the word and be shifted.
+
+For example, to remove `MINUS` from the list so it isn't changed to `UNDERSCORE`, add:
 
 ```
 &caps_word {
-    continue-list = <UNDERSCORE MINUS>;
+    shift-list = <>;
 };
 
 / {
@@ -37,9 +39,31 @@ By default, the caps word will remain active when any alphanumeric character or 
 };
 ```
 
+Alpha keys are automatically included in the list. This can be disabled by adding a [`no-default-keys`](#non-us-layouts) property.
+
+#### Continue List
+
+By default, caps word will remain active when any alphanumeric key, modifier key, key listed in `shift-list`, or `UNDERSCORE`, `BACKSPACE`, or `DELETE` is pressed. Any other key will turn off caps word. If you would like to override this, you can set a new array of keys in the `continue-list` property in your keymap. Any keys added to this list will continue a word but not be shifted.
+
+For example, to add left/right arrow keys to the default list, add:
+
+```
+&caps_word {
+    continue-list = <UNDERSCORE BACKSPACE DELETE LEFT RIGHT>;
+};
+
+/ {
+    keymap {
+        ...
+    };
+};
+```
+
+Alphanumeric keys are automatically included in the list. This can be disabled by adding a [`no-default-keys`](#non-us-layouts) property.
+
 #### Applied Modifier(s)
 
-In addition, if you would like _multiple_ modifiers, instead of just `MOD_LSFT`, you can override the `mods` property:
+In addition, if you would like caps word to apply different or _multiple_ modifiers instead of just `MOD_LSFT`, you can override the `mods` property:
 
 ```
 &caps_word {
@@ -66,6 +90,23 @@ For example, this would change the timeout to 10 seconds:
 ```
 
 Setting the timeout to 0 configures caps word to never time out. It will remain active until you press a key that turns off caps word.
+
+### Non-US Layouts
+
+Alphanumeric keys (A-Z, 0-9) are automatically included in `continue-list`, and alpha keys (A-Z) are automatically included in `shift-list`. This may result in unexpected behaviors for some OS keyboard layouts, for example in Dvorak where the quote key sends the Q keycode, and therefore is treated as continuing a word. You can disable this and manually specify the full lists by adding a `no-default-keys` property:
+
+```
+// Keycodes for Dvorak layout
+#define DV_A A
+#define DV_B N
+...
+
+&caps_word {
+    no-default-keys;
+    continue-list = <N0 N1 N2 N3 N4 N5 N6 N7 N8 N9 DV_UNDER BACKSPACE DELETE>;
+    shift-list = <DV_A DV_B DV_C ... DV_Z DV_MINUS>;
+};
+```
 
 ### Multiple Caps Breaks
 
