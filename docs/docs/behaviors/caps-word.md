@@ -5,9 +5,9 @@ sidebar_label: Caps Word
 
 ## Summary
 
-The caps word behavior behaves similar to a caps lock, but it will automatically deactivate at the end of a word. This is useful for typing single words in all capitals, such as abbreviations or identifiers in code. This is especially useful for smaller keyboards using [mod-taps](/docs/behaviors/mod-tap), where it can help avoid repeated alternating holds when typing words in all caps.
+The caps word behavior behaves similar to caps lock, but it will automatically deactivate at the end of a word. This is useful for typing single words in all capitals, such as abbreviations or identifiers in code. This is especially useful for smaller keyboards using [mod-taps](/docs/behaviors/mod-tap) for shift, where it can help avoid repeated alternating holds when typing words in all caps.
 
-When caps word is active, Shift is added to capitalize letters and change `-` to `_`. Caps word deactivates at the end of a word, that is when any key is pressed other than alphanumeric characters, `MINUS`, `UNDERSCORE`, `BACKSPACE`, or `DELETE`. It also deactivates if the caps word key is pressed again, or when the keyboard is idle for 5 seconds.
+When caps word is active, shift is added to capitalize letters. Caps word deactivates at the end of a word, that is when any key is pressed other than alphanumeric characters, `UNDERSCORE`, `BACKSPACE`, or `DELETE`. It also deactivates if the caps word key is pressed again, or when the keyboard is idle for 5 seconds.
 
 ### Behavior Binding
 
@@ -23,13 +23,13 @@ Example:
 
 #### Shift List
 
-By default, caps word will apply the Shift modifier to alpha keys and `MINUS`. If you would like to override this, you can set a new array of keys in the `shift-list` property in your keymap. Any keys added to this list will both continue the word and be shifted.
+By default, caps word will apply the shift modifier to only alpha keys. If you would like additional keys to be shifted, you can set an array of keys in the `shift-list` property in your keymap. Any keys added to this list will both continue the word and be shifted.
 
-For example, to remove `MINUS` from the list so it isn't changed to `UNDERSCORE`, add:
+For example, to make caps word change `-` to `_` for typing constants in code such as `GPIO_ACTIVE_LOW`, add `MINUS` to the `shift-list`:
 
 ```
 &caps_word {
-    shift-list = <>;
+    shift-list = <MINUS>;
 };
 
 / {
