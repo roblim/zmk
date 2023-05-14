@@ -17,5 +17,5 @@
 };
 
 &caps_word {
-	idle-timeout-ms = <0>;
+    idle-timeout-ms = <0>;
 };

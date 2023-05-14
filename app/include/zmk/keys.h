@@ -22,17 +22,20 @@ struct zmk_key_event {
     bool pressed;
 };
 
-struct zmk_key_decoded {
+/**
+ * Key data from a devicetree key code parameter.
+ */
+struct zmk_key_param {
     zmk_mod_flags_t modifiers;
     uint8_t page;
     uint16_t id;
 };
 
 /**
- * Convert a uint32_t devicetree key code parameter to a struct zmk_key_decoded.
+ * Decode a uint32_t devicetree key code parameter to a struct zmk_key_param.
  */
-#define ZMK_KEY_DECODE(encoded)                                                                    \
-    (struct zmk_key_decoded) {                                                                     \
+#define ZMK_KEY_DECODE_PARAM(encoded)                                                              \
+    (struct zmk_key_param) {                                                                       \
         .modifiers = SELECT_MODS(encoded), .page = ZMK_HID_USAGE_PAGE(encoded),                    \
         .id = ZMK_HID_USAGE_ID(encoded),                                                           \
     }

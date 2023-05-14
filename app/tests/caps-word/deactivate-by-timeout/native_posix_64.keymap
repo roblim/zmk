@@ -4,16 +4,16 @@
 #include "../behavior_keymap.dtsi"
 
 &caps_word {
-	idle-timeout-ms = <1000>;
+    idle-timeout-ms = <1000>;
 };
 
 &kscan {
-	events = <
-	ZMK_MOCK_PRESS(0,0,10)
-	ZMK_MOCK_RELEASE(0,0,10)
-	ZMK_MOCK_PRESS(0,1,10)
-	ZMK_MOCK_RELEASE(0,1,1500)
-	ZMK_MOCK_PRESS(0,1,10)
-	ZMK_MOCK_RELEASE(0,1,10)
-	>;
+    events = <
+    ZMK_MOCK_PRESS(0,0,10)
+    ZMK_MOCK_RELEASE(0,0,10)
+    ZMK_MOCK_PRESS(0,1,10)
+    ZMK_MOCK_RELEASE(0,1,1500)
+    ZMK_MOCK_PRESS(0,1,10)
+    ZMK_MOCK_RELEASE(0,1,10)
+    >;
 };

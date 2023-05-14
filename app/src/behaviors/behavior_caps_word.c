@@ -25,7 +25,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
 struct key_list {
-    const struct zmk_key_decoded *keys;
+    const struct zmk_key_param *keys;
     size_t len;
 };
 
@@ -38,7 +38,7 @@ struct behavior_caps_word_config {
 };
 
 struct behavior_caps_word_data {
-    struct k_timer idle_timer;
+    struct k_work_delayable idle_timer;
     bool active;
 };
 
@@ -51,7 +51,7 @@ static void restart_caps_word_idle_timer(const struct device *dev) {
     struct behavior_caps_word_data *data = dev->data;
 
     if (config->idle_timeout_ms) {
-        k_timer_start(&data->idle_timer, K_MSEC(config->idle_timeout_ms), K_NO_WAIT);
+        k_work_schedule(&data->idle_timer, K_MSEC(config->idle_timeout_ms));
     }
 }
 
@@ -68,7 +68,7 @@ static void cancel_caps_word_idle_timer(const struct device *dev) {
     struct behavior_caps_word_data *data = dev->data;
 
     if (config->idle_timeout_ms) {
-        k_timer_stop(&data->idle_timer);
+        k_work_cancel_delayable(&data->idle_timer);
     }
 }
 
@@ -118,7 +118,7 @@ ZMK_SUBSCRIPTION(behavior_caps_word, zmk_keycode_state_changed);
 static bool key_list_contains(const struct key_list *list, uint16_t usage_page, zmk_key_t usage_id,
                               zmk_mod_flags_t modifiers) {
     for (int i = 0; i < list->len; i++) {
-        const struct zmk_key_decoded *key = &list->keys[i];
+        const struct zmk_key_param *key = &list->keys[i];
 
         if (key->page == usage_page && key->id == usage_id &&
             (key->modifiers & modifiers) == key->modifiers) {
@@ -214,9 +214,10 @@ static int caps_word_keycode_state_changed_listener(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_BUBBLE;
 }
 
-static void caps_word_timeout_handler(struct k_timer *timer) {
+static void caps_word_timeout_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
     struct behavior_caps_word_data *data =
-        CONTAINER_OF(timer, struct behavior_caps_word_data, idle_timer);
+        CONTAINER_OF(dwork, struct behavior_caps_word_data, idle_timer);
 
     LOG_DBG("Deactivating caps_word for idle timeout");
     data->active = false;
@@ -227,7 +228,7 @@ static int behavior_caps_word_init(const struct device *dev) {
     struct behavior_caps_word_data *data = dev->data;
 
     if (config->idle_timeout_ms) {
-        k_timer_init(&data->idle_timer, caps_word_timeout_handler, NULL);
+        k_work_init_delayable(&data->idle_timer, caps_word_timeout_handler);
     }
 
     __ASSERT(dev_count < ARRAY_SIZE(devs), "Too many devices");
@@ -237,7 +238,7 @@ static int behavior_caps_word_init(const struct device *dev) {
     return 0;
 }
 
-#define KEY_ARRAY_ITEM(i, n, prop) ZMK_KEY_DECODE(DT_INST_PROP_BY_IDX(n, prop, i))
+#define KEY_ARRAY_ITEM(i, n, prop) ZMK_KEY_DECODE_PARAM(DT_INST_PROP_BY_IDX(n, prop, i))
 
 #define KEY_LIST_PROP(n, prop)                                                                     \
     COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(n), prop),                                            \
@@ -248,10 +249,10 @@ static int behavior_caps_word_init(const struct device *dev) {
 #define EMPTY_KEY_LIST ((struct key_list){.keys = NULL, .len = 0})
 
 #define KP_INST(n)                                                                                 \
-    static const struct zmk_key_decoded caps_word_continue_list_##n[] =                            \
+    static const struct zmk_key_param caps_word_continue_list_##n[] =                              \
         KEY_LIST_PROP(n, continue_list);                                                           \
                                                                                                    \
-    static const struct zmk_key_decoded caps_word_shift_list_##n[] = KEY_LIST_PROP(n, shift_list); \
+    static const struct zmk_key_param caps_word_shift_list_##n[] = KEY_LIST_PROP(n, shift_list);   \
                                                                                                    \
     static struct behavior_caps_word_data behavior_caps_word_data_##n = {.active = false};         \
                                                                                                    \

@@ -18,8 +18,8 @@
 };
 
 &caps_word {
-	continue-list = <UNDERSCORE BACKSPACE DELETE>;
-	/delete-property/ shift-list;
+    continue-list = <UNDERSCORE BACKSPACE DELETE>;
+    /delete-property/ shift-list;
 };
 
 &kscan {

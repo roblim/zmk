@@ -23,21 +23,14 @@ ZMK_EVENT_DECLARE(zmk_keycode_state_changed);
 
 static inline struct zmk_keycode_state_changed_event *
 zmk_keycode_state_changed_from_encoded(uint32_t encoded, bool pressed, int64_t timestamp) {
-    struct zmk_key_decoded key = ZMK_KEY_DECODE(encoded);
-    zmk_mod_flags_t implicit_modifiers = 0x00;
-    zmk_mod_flags_t explicit_modifiers = 0x00;
-
-    if (is_mod(key.page, key.id)) {
-        explicit_modifiers = key.modifiers;
-    } else {
-        implicit_modifiers = key.modifiers;
-    }
+    const struct zmk_key_param key = ZMK_KEY_DECODE_PARAM(encoded);
+    const bool is_explicit = is_mod(key.page, key.id);
 
     return new_zmk_keycode_state_changed(
         (struct zmk_keycode_state_changed){.usage_page = key.page,
                                            .keycode = key.id,
-                                           .implicit_modifiers = implicit_modifiers,
-                                           .explicit_modifiers = explicit_modifiers,
+                                           .implicit_modifiers = is_explicit ? 0 : key.modifiers,
+                                           .explicit_modifiers = is_explicit ? key.modifiers : 0,
                                            .state = pressed,
                                            .timestamp = timestamp});
 }
