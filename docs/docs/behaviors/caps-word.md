@@ -7,7 +7,7 @@ sidebar_label: Caps Word
 
 The caps word behavior behaves similar to caps lock, but it will automatically deactivate at the end of a word. This is useful for typing single words in all capitals, such as abbreviations or identifiers in code. This is especially useful for smaller keyboards using [mod-taps](/docs/behaviors/mod-tap) for shift, where it can help avoid repeated alternating holds when typing words in all caps.
 
-When caps word is active, shift is added to capitalize letters. Caps word deactivates at the end of a word, that is when any key is pressed other than alphanumeric characters, `UNDERSCORE`, `BACKSPACE`, or `DELETE`. It also deactivates if the caps word key is pressed again, or when the keyboard is idle for 5 seconds.
+The modifiers are applied only to to the alphabetic (`A` to `Z`) keycodes, to avoid automatically applying them to numeric values, etc.
 
 ### Behavior Binding
 
