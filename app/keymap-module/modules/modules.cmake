@@ -5,8 +5,6 @@
 #    * single overlay,
 #    * or per board/shield.
 
-cmake_minimum_required(VERSION 3.15)
-
 list(APPEND BOARD_ROOT ${APPLICATION_SOURCE_DIR})
 list(APPEND DTS_ROOT ${APPLICATION_SOURCE_DIR})
 
@@ -99,7 +97,6 @@ foreach(root ${BOARD_ROOT})
     if(DEFINED SHIELD)
         foreach(s ${SHIELD_AS_LIST})
             if(NOT ${s} IN_LIST SHIELD_LIST)
-                message(WARNING "Didn't find ${s}")
                 continue()
             endif()
             message(STATUS "Adding ${SHIELD_DIR_${s}}")

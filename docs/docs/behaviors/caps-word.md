@@ -15,7 +15,7 @@ The modifiers are applied only to to the alphabetic (`A` to `Z`) keycodes, to av
 
 Example:
 
-```
+```dts
 &caps_word
 ```
 
@@ -27,7 +27,7 @@ By default, caps word will apply the shift modifier to only alpha keys. If you w
 
 For example, to make caps word change `-` to `_` for typing constants in code such as `GPIO_ACTIVE_LOW`, add `MINUS` to the `shift-list`:
 
-```
+```dts
 &caps_word {
     shift-list = <MINUS>;
 };
@@ -65,7 +65,7 @@ Alphanumeric keys are automatically included in the list. This can be disabled b
 
 In addition, if you would like caps word to apply different or _multiple_ modifiers instead of just `MOD_LSFT`, you can override the `mods` property:
 
-```
+```dts
 &caps_word {
     mods = <(MOD_LSFT | MOD_LALT)>;
 };
@@ -112,11 +112,10 @@ Alphanumeric keys (A-Z, 0-9) are automatically included in `continue-list`, and 
 
 If you want to use multiple caps breaks with different codes to break the caps, you can add additional caps words instances to use in your keymap:
 
-```
+```dts
 / {
-    prog_caps: behavior_prog_caps_word {
+    prog_caps: prog_caps {
         compatible = "zmk,behavior-caps-word";
-        label = "PROG_CAPS";
         #binding-cells = <0>;
         continue-list = <UNDERSCORE>;
     };
